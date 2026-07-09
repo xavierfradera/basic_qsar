@@ -126,38 +126,73 @@ def _(PredictionErrorDisplay, activity_col, model, np, plt, test, train):
     # **8.** Fit the model and visualize its performance with scikit-learn's
     # PredictionErrorDisplay (actual vs. predicted) for the train and test sets.
     model.fit(np.stack(train.fp), train[activity_col])
+    fitted_model = model
 
     fig, axes = plt.subplots(1, 2, figsize=(10, 5))
     PredictionErrorDisplay.from_estimator(
-        model, np.stack(train.fp), train[activity_col],
+        fitted_model, np.stack(train.fp), train[activity_col],
         kind="actual_vs_predicted", ax=axes[0],
     )
     axes[0].set_title("Train")
     PredictionErrorDisplay.from_estimator(
-        model, np.stack(test.fp), test[activity_col],
+        fitted_model, np.stack(test.fp), test[activity_col],
         kind="actual_vs_predicted", ax=axes[1],
     )
     axes[1].set_title("Test")
     fig.tight_layout()
-    return
+    return (fitted_model,)
 
 
 @app.cell
-def _(PredictionErrorDisplay, activity_col, model, np, plt, test, train):
+def _(PredictionErrorDisplay, activity_col, fitted_model, np, plt, test, train):
     # Bonus
     # Plot the residuals for the training and test sets
     fig2, axes2 = plt.subplots(1, 2, figsize=(10, 5))
     PredictionErrorDisplay.from_estimator(
-        model, np.stack(train.fp), train[activity_col],
+        fitted_model, np.stack(train.fp), train[activity_col],
         kind="residual_vs_predicted", ax=axes2[0],
     )
     axes2[0].set_title("Train")
     PredictionErrorDisplay.from_estimator(
-        model, np.stack(test.fp), test[activity_col],
+        fitted_model, np.stack(test.fp), test[activity_col],
         kind="residual_vs_predicted", ax=axes2[1],
     )
     axes2[1].set_title("Test")
     fig2.tight_layout()
+    return
+
+
+@app.cell
+def _():
+    import marimo as mo
+    return (mo,)
+
+
+@app.cell(hide_code=True)
+def _(activity_col, df, fitted_model, mo, np, test, train):
+    # Summary. Only runs once `fitted_model` exists, i.e. step 8 has
+    # successfully fit the model.
+    predictions = df.copy()
+    predictions["split"] = np.where(predictions.index.isin(train.index), "train", "test")
+    predictions["predicted"] = fitted_model.predict(np.stack(predictions.fp))
+    predictions["residual"] = predictions[activity_col] - predictions["predicted"]
+
+    summary_md = mo.md(
+        f"""
+        ## Summary
+
+        - **Total molecules:** {len(df)}
+        - **Train set size:** {len(train)}
+        - **Test set size:** {len(test)}
+        """
+    )
+
+    results_table = mo.ui.table(
+        predictions[["SMILES", activity_col, "predicted", "residual", "split"]],
+        selection=None,
+    )
+
+    mo.vstack([summary_md, results_table])
     return
 
 
