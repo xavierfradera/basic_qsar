@@ -187,10 +187,9 @@ def _(
 
 
 @app.cell
-def _(activity_col, df_fp, fitted_model, np, test, train):
+def _(activity_col, df_fp, fitted_model, mo, np, test, train):
     # Summary. Only runs once `fitted_model` exists, i.e. step 8 has
     # successfully fit the model.
-    import marimo as mo
     predictions = df_fp.copy()
     predictions["split"] = np.where(predictions.index.isin(train.index), "train", "test")
     predictions["predicted"] = fitted_model.predict(np.stack(predictions.fp))
@@ -212,7 +211,7 @@ def _(activity_col, df_fp, fitted_model, np, test, train):
     )
 
     mo.vstack([summary_md, results_table])
-    return mo, predictions
+    return (predictions,)
 
 
 @app.cell
