@@ -182,6 +182,34 @@ def _(
     return
 
 
+@app.cell(hide_code=True)
+def _(activity_col, df, fitted_model, mo, np, test, train):
+    # Summary. Only runs once `fitted_model` exists, i.e. step 8 has
+    # successfully fit the model.
+    predictions = df.copy()
+    predictions["split"] = np.where(predictions.index.isin(train.index), "train", "test")
+    predictions["predicted"] = fitted_model.predict(np.stack(predictions.fp))
+    predictions["residual"] = predictions[activity_col] - predictions["predicted"]
+
+    summary_md = mo.md(
+        f"""
+        ## Summary
+
+        - **Total molecules:** {len(df)}
+        - **Train set size:** {len(train)}
+        - **Test set size:** {len(test)}
+        """
+    )
+
+    results_table = mo.ui.table(
+        predictions[["SMILES", activity_col, "predicted", "residual", "split"]],
+        selection=None,
+    )
+
+    mo.vstack([summary_md, results_table])
+    return (predictions,)
+
+
 @app.cell
 def _(
     activity_col,
