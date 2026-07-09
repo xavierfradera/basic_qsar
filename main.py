@@ -14,20 +14,21 @@ def _():
     from molfeat.calc import FPCalculator
     from molfeat.trans import MoleculeTransformer
     import numpy as np
+    import matplotlib.pyplot as plt
     from sklearn.model_selection import train_test_split
     from sklearn.ensemble import HistGradientBoostingRegressor
-    from yellowbrick.regressor import prediction_error, residuals_plot
+    from sklearn.metrics import PredictionErrorDisplay
     import wget
 
     return (
         FPCalculator,
         HistGradientBoostingRegressor,
         MoleculeTransformer,
+        PredictionErrorDisplay,
         dm,
         np,
         pd,
-        prediction_error,
-        residuals_plot,
+        plt,
         train_test_split,
     )
 
@@ -121,18 +122,42 @@ def _(HistGradientBoostingRegressor):
 
 
 @app.cell
-def _(activity_col, model, np, prediction_error, test, train):
-    # **8.** Use YellowBrick to build a model and visualize its performance.
-    # The Loss reported in the plot below is the R^2 for the model.
-    visualizer = prediction_error(model, np.stack(train.fp), train[activity_col], np.stack(test.fp), test[activity_col])
+def _(PredictionErrorDisplay, activity_col, model, np, plt, test, train):
+    # **8.** Fit the model and visualize its performance with scikit-learn's
+    # PredictionErrorDisplay (actual vs. predicted) for the train and test sets.
+    model.fit(np.stack(train.fp), train[activity_col])
+
+    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
+    PredictionErrorDisplay.from_estimator(
+        model, np.stack(train.fp), train[activity_col],
+        kind="actual_vs_predicted", ax=axes[0],
+    )
+    axes[0].set_title("Train")
+    PredictionErrorDisplay.from_estimator(
+        model, np.stack(test.fp), test[activity_col],
+        kind="actual_vs_predicted", ax=axes[1],
+    )
+    axes[1].set_title("Test")
+    fig.tight_layout()
     return
 
 
 @app.cell
-def _(activity_col, model, np, residuals_plot, test, train):
+def _(PredictionErrorDisplay, activity_col, model, np, plt, test, train):
     # Bonus
     # Plot the residuals for the training and test sets
-    viz = residuals_plot(model, np.stack(train.fp), train[activity_col], np.stack(test.fp), test[activity_col], is_fitted=True)
+    fig2, axes2 = plt.subplots(1, 2, figsize=(10, 5))
+    PredictionErrorDisplay.from_estimator(
+        model, np.stack(train.fp), train[activity_col],
+        kind="residual_vs_predicted", ax=axes2[0],
+    )
+    axes2[0].set_title("Train")
+    PredictionErrorDisplay.from_estimator(
+        model, np.stack(test.fp), test[activity_col],
+        kind="residual_vs_predicted", ax=axes2[1],
+    )
+    axes2[1].set_title("Test")
+    fig2.tight_layout()
     return
 
 
