@@ -102,18 +102,22 @@ def _(df, dm, trans):
     # Note the use of the function from datamol that silences logging messages
     # from the RDKit.  This is a more polite version of my rd_shut_the_hell_up
     # function in useful_rdkit_utils.
+    # `df_fp` is returned as a new binding (rather than relying on the
+    # in-place mutation of `df`) so downstream cells have an explicit
+    # reactive dependency on the fingerprints having been computed.
     with dm.without_rdkit_log():
         df['fp'] = trans.transform(df.SMILES.values)
-    return
+    df_fp = df
+    return (df_fp,)
 
 
 @app.cell
-def _(df, train_test_split):
+def _(df_fp, train_test_split):
     # **6.** Split the data into training and test sets.
     # I like to do this with dataframes.  That way I don't have to remember the
     # order in which train_X, test_X, train_y, and test_y are returned by
     # train_test_split.
-    train, test = train_test_split(df)
+    train, test = train_test_split(df_fp)
     return test, train
 
 
@@ -183,10 +187,10 @@ def _(
 
 
 @app.cell(hide_code=True)
-def _(activity_col, df, fitted_model, mo, np, test, train):
+def _(activity_col, df_fp, fitted_model, mo, np, test, train):
     # Summary. Only runs once `fitted_model` exists, i.e. step 8 has
     # successfully fit the model.
-    predictions = df.copy()
+    predictions = df_fp.copy()
     predictions["split"] = np.where(predictions.index.isin(train.index), "train", "test")
     predictions["predicted"] = fitted_model.predict(np.stack(predictions.fp))
     predictions["residual"] = predictions[activity_col] - predictions["predicted"]
@@ -195,7 +199,7 @@ def _(activity_col, df, fitted_model, mo, np, test, train):
         f"""
         ## Summary
 
-        - **Total molecules:** {len(df)}
+        - **Total molecules:** {len(df_fp)}
         - **Train set size:** {len(train)}
         - **Test set size:** {len(test)}
         """
