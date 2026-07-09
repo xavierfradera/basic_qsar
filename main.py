@@ -15,9 +15,15 @@ def _():
     from molfeat.trans import MoleculeTransformer
     import numpy as np
     import matplotlib.pyplot as plt
+    from scipy import stats
     from sklearn.model_selection import train_test_split
     from sklearn.ensemble import HistGradientBoostingRegressor
-    from sklearn.metrics import PredictionErrorDisplay
+    from sklearn.metrics import (
+        PredictionErrorDisplay,
+        mean_absolute_error,
+        r2_score,
+        root_mean_squared_error,
+    )
     import wget
 
     return (
@@ -26,9 +32,13 @@ def _():
         MoleculeTransformer,
         PredictionErrorDisplay,
         dm,
+        mean_absolute_error,
         np,
         pd,
         plt,
+        r2_score,
+        root_mean_squared_error,
+        stats,
         train_test_split,
     )
 
@@ -193,6 +203,77 @@ def _(activity_col, df, fitted_model, mo, np, test, train):
     )
 
     mo.vstack([summary_md, results_table])
+    return (predictions,)
+
+
+@app.cell
+def _(
+    activity_col,
+    mean_absolute_error,
+    mo,
+    pd,
+    predictions,
+    r2_score,
+    root_mean_squared_error,
+    stats,
+):
+    # **Quality of prediction.** Regress predicted activity against actual
+    # activity for the train and test sets and report R^2, Pearson r, MAE,
+    # RMSE, and the regression line's slope/intercept.
+    def _regression_stats(actual, predicted):
+        slope, intercept, r_value, p_value, std_err = stats.linregress(actual, predicted)
+        return {
+            "r_squared": r2_score(actual, predicted),
+            "pearson_r": r_value,
+            "mae": mean_absolute_error(actual, predicted),
+            "rmse": root_mean_squared_error(actual, predicted),
+            "slope": slope,
+            "intercept": intercept,
+        }
+
+    fit_stats = {
+        split_name: _regression_stats(
+            subset[activity_col].to_numpy(), subset["predicted"].to_numpy()
+        )
+        for split_name, subset in predictions.groupby("split")
+    }
+
+    fit_stats_df = pd.DataFrame(fit_stats).T.reset_index(names="split")
+    mo.ui.table(fit_stats_df, selection=None)
+    return (fit_stats,)
+
+
+@app.cell
+def _(activity_col, fit_stats, np, plt, predictions):
+    # Scatter plot of actual vs. predicted activity for train and test, with
+    # the fitted regression line and the y = x equality line for reference.
+    fig3, axes3 = plt.subplots(1, 2, figsize=(10, 5))
+    for ax, split_name in zip(axes3, ["train", "test"]):
+        subset = predictions[predictions["split"] == split_name]
+        actual = subset[activity_col].to_numpy()
+        predicted = subset["predicted"].to_numpy()
+
+        lims = [
+            min(actual.min(), predicted.min()),
+            max(actual.max(), predicted.max()),
+        ]
+        xs = np.linspace(lims[0], lims[1], 2)
+
+        ax.scatter(actual, predicted, alpha=0.6, edgecolor="k", linewidth=0.3)
+        ax.plot(xs, xs, "k--", label="y = x")
+        ax.plot(
+            xs,
+            fit_stats[split_name]["slope"] * xs + fit_stats[split_name]["intercept"],
+            "r-",
+            label="Regression fit",
+        )
+        ax.set_xlim(lims)
+        ax.set_ylim(lims)
+        ax.set_xlabel(f"Actual {activity_col}")
+        ax.set_ylabel(f"Predicted {activity_col}")
+        ax.set_title(f"{split_name.capitalize()} (R² = {fit_stats[split_name]['r_squared']:.3f})")
+        ax.legend()
+    fig3.tight_layout()
     return
 
 
