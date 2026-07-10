@@ -137,12 +137,6 @@ def _(HistGradientBoostingRegressor):
 
 
 @app.cell
-def _(np, train):
-    print(np.stack(train.fp))
-    return
-
-
-@app.cell
 def _(activity_col, model, np, train):
     # **8.** Fit the model and visualize its performance with scikit-learn's
     # PredictionErrorDisplay (actual vs. predicted) for the train and test sets.
