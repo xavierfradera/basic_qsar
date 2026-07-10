@@ -6,9 +6,10 @@ app = marimo.App()
 
 @app.cell
 def _():
-    # Build a QSAR model in 8 lines of Python
-    # Based on code from https://colab.research.google.com/github/PatWalters/practical_cheminformatics_tutorials/blob/main/ml_models/QSAR_in_8_lines.ipynb
-    #
+    # Basic QSAR models
+    # All imports made here are returned so every import is global and
+    # reusable from any other cell in the notebook, instead of each cell
+    # re-importing what it needs.
     import marimo as mo
     import pandas as pd
     import datamol as dm
@@ -27,12 +28,15 @@ def _():
         MoleculeTransformer,
         dm,
         mean_absolute_error,
+        mo,
         np,
         pd,
+        plt,
         r2_score,
         root_mean_squared_error,
         stats,
         train_test_split,
+        wget,
     )
 
 
@@ -155,10 +159,8 @@ def _(
 
 
 @app.cell
-def _(summary):
+def _(mo, summary):
     # display summary
-    import marimo as _mo
-
     _numeric_cols = ["r_squared", "pearson_r", "mae", "rmse", "slope", "intercept"]
 
     _pivoted = summary.pivot(index="model_number", columns="split", values=_numeric_cols)
@@ -167,7 +169,7 @@ def _(summary):
 
     _value_cols = [_c for _c in _pivoted.columns if _c != "model_number"]
 
-    _mo.ui.table(
+    mo.ui.table(
         _pivoted,
         format_mapping={_col: "{:.2f}" for _col in _value_cols},
         selection=None,
@@ -177,7 +179,7 @@ def _(summary):
 
 @app.cell
 def _():
-    # scatter plots - UI to view scatterplots for selecte model
+    # scatter plots - UI to view scatterplots for selected models
     return
 
 
