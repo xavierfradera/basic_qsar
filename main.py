@@ -18,7 +18,7 @@ def _():
     import matplotlib.pyplot as plt
     from scipy import stats
     from sklearn.model_selection import train_test_split
-    from sklearn.ensemble import HistGradientBoostingRegressor
+
     from sklearn.metrics import (
         PredictionErrorDisplay,
         mean_absolute_error,
@@ -28,10 +28,6 @@ def _():
     import wget
 
     return (
-        FPCalculator,
-        HistGradientBoostingRegressor,
-        MoleculeTransformer,
-        dm,
         mean_absolute_error,
         mo,
         np,
@@ -40,7 +36,6 @@ def _():
         r2_score,
         root_mean_squared_error,
         stats,
-        train_test_split,
     )
 
 
@@ -69,81 +64,51 @@ def _(pd):
     activity_col = df.columns[-1]
     print(f"The activity column is proably {activity_col}")
     df.head()
-    return activity_col, df
+    return (activity_col,)
 
 
 @app.cell
-def _(FPCalculator):
-    # **2.** Instantiate a Fingerprint calculator from the awesome molfeat
-    # package. This package has several descriptor types available.
-    #     from molfeat.calc import FP_FUNCS
-    #     FP_FUNCS.keys()
-    #     dict_keys(['maccs', 'avalon', 'ecfp', 'fcfp', 'topological', 'atompair',
-    #     'rdkit', 'pattern', 'layered', 'map4', 'secfp', 'erg', 'estate',
-    #     'avalon-count', 'rdkit-count', 'ecfp-count', 'fcfp-count',
-    #     'topological-count', 'atompair-count'])
-    calc = FPCalculator("ecfp")
-    return (calc,)
+def _():
+    # Create list of FPs and regressors we want to try
+    from sklearn.ensemble import HistGradientBoostingRegressor
+    from sklearn.ensemble import RandomForestRegressor
+    from lightgbm import LGBMRegressor
+    from xgboost import XGBRegressor
+
+    fp_list = [  'ecfp', 'fcfp',  'topological', 'atompair']
+    reg_list = [HistGradientBoostingRegressor, RandomForestRegressor, LGBMRegressor, XGBRegressor]
+    print("%i fingerprint types and %i regressor types: % i combinations" % (len(fp_list), len(reg_list), len(fp_list)*len(reg_list)))
+    return (reg_list,)
+
+
+app._unparsable_cell(
+    r"""
+    # Loop over all combinations
+    models = []
+    for _f in fp_list:
+        for _r in reg_list:
+            print(_f, _r)
+            _calc = FPCalculator(_f)
+            _trans = MoleculeTransformer(_calc)
+            with dm.without_rdkit_log():
+                df['fp'] = _trans.transform(df.SMILES.values)
+            _df_fp = df
+            _train, _test = train_test_split(_df_fp)
+            _r.fit(np.stack(_train.fp), _train[activity_col])
+            fitted_model = model
+
+            ## calculate regression etc. and put in array
+            models.append([ _f, _r, .......])
+    """,
+    name="_"
+)
 
 
 @app.cell
-def _(MoleculeTransformer, calc):
-    # **3.** Instantiate a molecule transfomer from molfeat.
-    # This object takes a list of SMILES as input and returns descriptors.  It's
-    # very flexible and can run in parallel.
-    trans = MoleculeTransformer(calc)
-    return (trans,)
-
-
-@app.cell
-def _(df, dm, trans):
-    # **4-5.** Calculate the fingerprints.
-    # Note the use of the function from datamol that silences logging messages
-    # from the RDKit.  This is a more polite version of my rd_shut_the_hell_up
-    # function in useful_rdkit_utils.
-    # `df_fp` is returned as a new binding (rather than relying on the
-    # in-place mutation of `df`) so downstream cells have an explicit
-    # reactive dependency on the fingerprints having been computed.
-    with dm.without_rdkit_log():
-        df['fp'] = trans.transform(df.SMILES.values)
-    df_fp = df
-    return (df_fp,)
-
-
-@app.cell
-def _(df_fp, train_test_split):
-    # **6.** Split the data into training and test sets.
-    # I like to do this with dataframes.  That way I don't have to remember the
-    # order in which train_X, test_X, train_y, and test_y are returned by
-    # train_test_split.
-    train, test = train_test_split(df_fp)
-    return test, train
-
-
-@app.cell
-def _(HistGradientBoostingRegressor):
-    # **7.** Instantiate an sklearn style regressor.
-    # In this case I used HistGradientBoostingRegressor, which is the
-    # scikit-learn implementation of LightGBM.  You can easily plug in any
-    # scikit-learn compatible regressor like RandomForest or XGBoost.
-    #     from lightgbm import LGBMRegressor
-    #     model = LGBMRegressor()
-    #     from sklearn.ensemble import RandomForestRegressor
-    #     model = RandomForestRegressor()
-    #     from xgboost import XGBRegressor
-    #     model = XGBRegressor()
-    model = HistGradientBoostingRegressor()
-    return (model,)
-
-
-@app.cell
-def _(activity_col, model, np, train):
-    # **8.** Fit the model and visualize its performance with scikit-learn's
-    # PredictionErrorDisplay (actual vs. predicted) for the train and test sets.
-    model.fit(np.stack(train.fp), train[activity_col])
-    fitted_model = model
-
-    return (fitted_model,)
+def _(reg_list):
+    r =reg_list[0]
+    print(r)
+    return
 
 
 @app.cell
