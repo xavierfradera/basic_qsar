@@ -31,7 +31,6 @@ def _():
         FPCalculator,
         HistGradientBoostingRegressor,
         MoleculeTransformer,
-        PredictionErrorDisplay,
         dm,
         mean_absolute_error,
         mo,
@@ -138,52 +137,19 @@ def _(HistGradientBoostingRegressor):
 
 
 @app.cell
-def _(PredictionErrorDisplay, activity_col, model, np, plt, test, train):
+def _(np, train):
+    print(np.stack(train.fp))
+    return
+
+
+@app.cell
+def _(activity_col, model, np, train):
     # **8.** Fit the model and visualize its performance with scikit-learn's
     # PredictionErrorDisplay (actual vs. predicted) for the train and test sets.
     model.fit(np.stack(train.fp), train[activity_col])
     fitted_model = model
 
-    fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-    PredictionErrorDisplay.from_estimator(
-        fitted_model, np.stack(train.fp), train[activity_col],
-        kind="actual_vs_predicted", ax=axes[0],
-    )
-    axes[0].set_title("Train")
-    PredictionErrorDisplay.from_estimator(
-        fitted_model, np.stack(test.fp), test[activity_col],
-        kind="actual_vs_predicted", ax=axes[1],
-    )
-    axes[1].set_title("Test")
-    fig.tight_layout()
     return (fitted_model,)
-
-
-@app.cell
-def _(
-    PredictionErrorDisplay,
-    activity_col,
-    fitted_model,
-    np,
-    plt,
-    test,
-    train,
-):
-    # Bonus
-    # Plot the residuals for the training and test sets
-    fig2, axes2 = plt.subplots(1, 2, figsize=(10, 5))
-    PredictionErrorDisplay.from_estimator(
-        fitted_model, np.stack(train.fp), train[activity_col],
-        kind="residual_vs_predicted", ax=axes2[0],
-    )
-    axes2[0].set_title("Train")
-    PredictionErrorDisplay.from_estimator(
-        fitted_model, np.stack(test.fp), test[activity_col],
-        kind="residual_vs_predicted", ax=axes2[1],
-    )
-    axes2[1].set_title("Test")
-    fig2.tight_layout()
-    return
 
 
 @app.cell
@@ -208,6 +174,10 @@ def _(activity_col, df_fp, fitted_model, mo, np, test, train):
     results_table = mo.ui.table(
         predictions[["SMILES", activity_col, "predicted", "residual", "split"]],
         selection=None,
+        format_mapping={ activity_col: lambda v: round(v,2),
+                         "predicted": lambda v: round(v,2),
+                         "residual": lambda v: round(v,2)                     
+                       }
     )
 
     mo.vstack([summary_md, results_table])
@@ -247,7 +217,14 @@ def _(
     }
 
     fit_stats_df = pd.DataFrame(fit_stats).T.reset_index(names="split")
-    mo.ui.table(fit_stats_df, selection=None)
+    mo.ui.table(fit_stats_df, selection=None,
+               format_mapping={ 'r_squared': lambda v: round(v,2),
+                                'pearson_r': lambda v: round(v,2),
+                                'mae': lambda v: round(v,2),
+                                'rmse': lambda v: round(v,2),
+                                'slope': lambda v: round(v,2),
+                                'intercept': lambda v: round(v,2)
+                              })
     return (fit_stats,)
 
 
@@ -268,7 +245,9 @@ def _(activity_col, fit_stats, np, plt, predictions):
         xs = np.linspace(lims[0], lims[1], 2)
 
         ax.scatter(actual, predicted, alpha=0.6, edgecolor="k", linewidth=0.3)
-        ax.plot(xs, xs, "k--", label="y = x")
+        ax.plot(xs, xs, "k", label="y = x")
+        ax.plot(xs, xs+1, "k--", label="+1")
+        ax.plot(xs, xs-1, "k--", label="-1")
         ax.plot(
             xs,
             fit_stats[split_name]["slope"] * xs + fit_stats[split_name]["intercept"],
@@ -281,7 +260,7 @@ def _(activity_col, fit_stats, np, plt, predictions):
         ax.set_ylabel(f"Predicted {activity_col}")
         ax.set_title(f"{split_name.capitalize()} (R² = {fit_stats[split_name]['r_squared']:.3f})")
         ax.legend()
-    fig3.tight_layout()
+    fig3
     return
 
 
