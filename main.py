@@ -18,146 +18,54 @@ def _():
     import matplotlib.pyplot as plt
     from scipy import stats
     from sklearn.model_selection import train_test_split
+    from yellowbrick.regressor import prediction_error, residuals_plot
 
-    from sklearn.metrics import (
-        PredictionErrorDisplay,
-        mean_absolute_error,
-        r2_score,
-        root_mean_squared_error,
-    )
     import wget
 
     return (
-        mean_absolute_error,
-        mo,
+        FPCalculator,
+        MoleculeTransformer,
+        dm,
         np,
         pd,
-        plt,
-        r2_score,
-        root_mean_squared_error,
         stats,
+        train_test_split,
     )
-
-
-@app.cell
-def _():
-    # **0.** Get an input file.
-    # We  need a csv file with Chemical structures as SMILES and some
-    # property or actvity file.  The file should have a column named SMILES and an
-    # activity column whose name we will specify below.
-    #
-    # The code below will download a demo file called "carbonic.csv" from GitHub.
-
-    # wget.download("https://raw.githubusercontent.com/PatWalters/datafiles/refs/heads/main/carbonic.csv")
-    return
 
 
 @app.cell
 def _(pd):
-    # **1.** Read the data into a Pandas dataframe.
-    # In the next cell we read the data from a csv file and put it into a Pandas
-    # dataframe
-    # The code below uses the last column in the dataframe as the the acivity column.
+    # Read the data into a Pandas dataframe.
 
     filename = "carbonic.csv"
+
     df = pd.read_csv(filename)
     activity_col = df.columns[-1]
     print(f"The activity column is proably {activity_col}")
     df.head()
-    return (activity_col,)
+    return activity_col, df
 
 
 @app.cell
 def _():
-    # Create list of FPs and regressors we want to try
+    # List of FPs and regressors we want to try
     from sklearn.ensemble import HistGradientBoostingRegressor
     from sklearn.ensemble import RandomForestRegressor
     from lightgbm import LGBMRegressor
     from xgboost import XGBRegressor
 
-    fp_list = [  'ecfp', 'fcfp',  'topological', 'atompair']
-    reg_list = [HistGradientBoostingRegressor, RandomForestRegressor, LGBMRegressor, XGBRegressor]
+    fp_list = [  'ecfp', 'fcfp' ] #,  'topological', 'atompair']
+    reg_list = [HistGradientBoostingRegressor, RandomForestRegressor] #, LGBMRegressor, XGBRegressor]
     print("%i fingerprint types and %i regressor types: % i combinations" % (len(fp_list), len(reg_list), len(fp_list)*len(reg_list)))
-    return (reg_list,)
-
-
-app._unparsable_cell(
-    r"""
-    # Loop over all combinations
-    models = []
-    for _f in fp_list:
-        for _r in reg_list:
-            print(_f, _r)
-            _calc = FPCalculator(_f)
-            _trans = MoleculeTransformer(_calc)
-            with dm.without_rdkit_log():
-                df['fp'] = _trans.transform(df.SMILES.values)
-            _df_fp = df
-            _train, _test = train_test_split(_df_fp)
-            _r.fit(np.stack(_train.fp), _train[activity_col])
-            fitted_model = model
-
-            ## calculate regression etc. and put in array
-            models.append([ _f, _r, .......])
-    """,
-    name="_"
-)
+    return fp_list, reg_list
 
 
 @app.cell
-def _(reg_list):
-    r =reg_list[0]
-    print(r)
-    return
-
-
-@app.cell
-def _(activity_col, df_fp, fitted_model, mo, np, test, train):
-    # Summary. Only runs once `fitted_model` exists, i.e. step 8 has
-    # successfully fit the model.
-    predictions = df_fp.copy()
-    predictions["split"] = np.where(predictions.index.isin(train.index), "train", "test")
-    predictions["predicted"] = fitted_model.predict(np.stack(predictions.fp))
-    predictions["residual"] = predictions[activity_col] - predictions["predicted"]
-
-    summary_md = mo.md(
-        f"""
-        ## Summary
-
-        - **Total molecules:** {len(df_fp)}
-        - **Train set size:** {len(train)}
-        - **Test set size:** {len(test)}
-        """
-    )
-
-    results_table = mo.ui.table(
-        predictions[["SMILES", activity_col, "predicted", "residual", "split"]],
-        selection=None,
-        format_mapping={ activity_col: lambda v: round(v,2),
-                         "predicted": lambda v: round(v,2),
-                         "residual": lambda v: round(v,2)                     
-                       }
-    )
-
-    mo.vstack([summary_md, results_table])
-    return (predictions,)
-
-
-@app.cell
-def _(
-    activity_col,
-    mean_absolute_error,
-    mo,
-    pd,
-    predictions,
-    r2_score,
-    root_mean_squared_error,
-    stats,
-):
+def _(mean_absolute_error, r2_score, root_mean_squared_error, stats):
     # **Quality of prediction.** Regress predicted activity against actual
     # activity for the train and test sets and report R^2, Pearson r, MAE,
     # RMSE, and the regression line's slope/intercept.
-    def _regression_stats(actual, predicted):
+    def regression_stats(actual, predicted):
         slope, intercept, r_value, p_value, std_err = stats.linregress(actual, predicted)
         return {
             "r_squared": r2_score(actual, predicted),
@@ -168,58 +76,90 @@ def _(
             "intercept": intercept,
         }
 
-    fit_stats = {
-        split_name: _regression_stats(
-            subset[activity_col].to_numpy(), subset["predicted"].to_numpy()
-        )
-        for split_name, subset in predictions.groupby("split")
-    }
-
-    fit_stats_df = pd.DataFrame(fit_stats).T.reset_index(names="split")
-    mo.ui.table(fit_stats_df, selection=None,
-               format_mapping={ 'r_squared': lambda v: round(v,2),
-                                'pearson_r': lambda v: round(v,2),
-                                'mae': lambda v: round(v,2),
-                                'rmse': lambda v: round(v,2),
-                                'slope': lambda v: round(v,2),
-                                'intercept': lambda v: round(v,2)
-                              })
-    return (fit_stats,)
+    return (regression_stats,)
 
 
 @app.cell
-def _(activity_col, fit_stats, np, plt, predictions):
-    # Scatter plot of actual vs. predicted activity for train and test, with
-    # the fitted regression line and the y = x equality line for reference.
-    fig3, axes3 = plt.subplots(1, 2, figsize=(10, 5))
-    for ax, split_name in zip(axes3, ["train", "test"]):
-        subset = predictions[predictions["split"] == split_name]
-        actual = subset[activity_col].to_numpy()
-        predicted = subset["predicted"].to_numpy()
+def _(df, train_test_split):
+    # training and test sets
+    train, test = train_test_split(df)
+    print("Train set: %i\nTest set: %i" % (len(train), len(test)))
+    return test, train
 
-        lims = [
-            min(actual.min(), predicted.min()),
-            max(actual.max(), predicted.max()),
-        ]
-        xs = np.linspace(lims[0], lims[1], 2)
 
-        ax.scatter(actual, predicted, alpha=0.6, edgecolor="k", linewidth=0.3)
-        ax.plot(xs, xs, "k", label="y = x")
-        ax.plot(xs, xs+1, "k--", label="+1")
-        ax.plot(xs, xs-1, "k--", label="-1")
-        ax.plot(
-            xs,
-            fit_stats[split_name]["slope"] * xs + fit_stats[split_name]["intercept"],
-            "r-",
-            label="Regression fit",
-        )
-        ax.set_xlim(lims)
-        ax.set_ylim(lims)
-        ax.set_xlabel(f"Actual {activity_col}")
-        ax.set_ylabel(f"Predicted {activity_col}")
-        ax.set_title(f"{split_name.capitalize()} (R² = {fit_stats[split_name]['r_squared']:.3f})")
-        ax.legend()
-    fig3
+@app.cell
+def _(
+    FPCalculator,
+    MoleculeTransformer,
+    activity_col,
+    dm,
+    fp_list,
+    np,
+    pd,
+    reg_list,
+    regression_stats,
+    test,
+    train,
+):
+    # Loop over all combinations and create all models
+    # Calculate stats for each model and save in dataframe
+    models = {}
+    _cols = { 'model_number': 'int16',
+              'split': 'string',
+              'r_squared': 'float64',
+              'pearson_r': 'float64',
+              'mae': 'float64',
+              'rmse': 'float64',
+              'slope': 'float64',
+              'intercept': 'float64',
+            }
+    summary = pd.DataFrame(columns=_cols.keys()).astype(_cols)
+    _train_act = train[activity_col]
+    _test_act = test[activity_col]
+
+    _i = 0
+    _train2 = train.copy()
+    _test2 = test.copy()
+    for _f in fp_list:
+        _calc = FPCalculator(_f)
+        _trans = MoleculeTransformer(_calc)
+        with dm.without_rdkit_log():
+            _train2['fp'] = _trans.transform(_train2.SMILES.values)
+            _test2['fp'] = _trans.transform(_test2.SMILES.values)
+        for _r in reg_list:
+            print("%i: %s - %s" % (_i, _f, _r))
+            _model = _r()
+            _model.fit(np.stack(_train2.fp), _train2[activity_col])
+
+            _i += 1
+            # stats - should put all into a dataframe
+            _train_pred = _model.predict(np.stack(_train2.fp))
+            _test_pred = _model.predict(np.stack(_test2.fp))
+            _s = regression_stats(_train_act, _train_pred)
+            _s['model_number'] = _i
+            _s['split'] = 'train'
+            _add = pd.DataFrame([_s])
+            summary = pd.concat([summary, _add], ignore_index=True)
+            _s = regression_stats(_test_act, _test_pred)
+            _s['model_number'] = _i
+            _s['split'] = 'test'
+            _add = pd.DataFrame([_s])
+            summary = pd.concat([summary, _add], ignore_index=True)
+            # save model
+            models[_i] = _model
+    n_models = _i      
+    return (summary,)
+
+
+@app.cell
+def _(summary):
+    summary
+    return
+
+
+@app.cell
+def _():
+    # scatter plots - UI to view scatterplots for selecte model
     return
 
 
