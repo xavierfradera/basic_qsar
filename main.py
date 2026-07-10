@@ -36,7 +36,6 @@ def _():
         root_mean_squared_error,
         stats,
         train_test_split,
-        wget,
     )
 
 
@@ -111,6 +110,9 @@ def _(
     # Loop over all combinations and create all models
     # Calculate stats for each model and save in dataframe
     models = {}
+    # Actual/predicted values per model, kept for the scatter plot cell so
+    # it doesn't need to refit or re-transform anything.
+    predictions = {}
     _cols = { 'model_number': 'int16',
               'split': 'string',
               'r_squared': 'float64',
@@ -152,10 +154,18 @@ def _(
             _s['split'] = 'test'
             _add = pd.DataFrame([_s])
             summary = pd.concat([summary, _add], ignore_index=True)
-            # save model
+            # save model and its predictions
             models[_i] = _model
-    n_models = _i      
-    return (summary,)
+            predictions[_i] = {
+                'fp': _f,
+                'regressor': _r.__name__,
+                'train_actual': _train_act.to_numpy(),
+                'train_pred': _train_pred,
+                'test_actual': _test_act.to_numpy(),
+                'test_pred': _test_pred,
+            }
+    n_models = _i
+    return predictions, summary
 
 
 @app.cell
@@ -178,8 +188,55 @@ def _(mo, summary):
 
 
 @app.cell
-def _():
-    # scatter plots - UI to view scatterplots for selected models
+def _(mo, predictions, summary):
+    # Model selector, defaulting to the model with the highest test R^2
+    _test_summary = summary[summary["split"] == "test"]
+    _default_model = int(_test_summary.loc[_test_summary["r_squared"].idxmax(), "model_number"])
+
+    _options = {
+        f"{_n}: {_p['fp']} + {_p['regressor']}": _n for _n, _p in predictions.items()
+    }
+    _default_label = next(_label for _label, _n in _options.items() if _n == _default_model)
+
+    model_selector = mo.ui.dropdown(options=_options, value=_default_label, label="Model")
+    model_selector
+    return (model_selector,)
+
+
+@app.cell
+def _(model_selector, np, plt, predictions, summary):
+    # scatter plots - actual vs. predicted for the selected model's
+    # train and test sets
+    _model_number = model_selector.value
+    _pred = predictions[_model_number]
+    _model_label = f"{_pred['fp']} + {_pred['regressor']}"
+
+    _fig, _axes = plt.subplots(1, 2, figsize=(10, 5))
+    for _ax, _split in zip(_axes, ["train", "test"]):
+        _actual = _pred[f"{_split}_actual"]
+        _predicted = _pred[f"{_split}_pred"]
+        _stats = summary[
+            (summary["model_number"] == _model_number) & (summary["split"] == _split)
+        ].iloc[0]
+
+        _lims = [min(_actual.min(), _predicted.min()), max(_actual.max(), _predicted.max())]
+        _xs = np.linspace(_lims[0], _lims[1], 2)
+
+        _ax.scatter(_actual, _predicted, alpha=0.6, edgecolor="k", linewidth=0.3, label="Predictions")
+        _ax.plot(_xs, _xs, "k--", label="Equality (y = x)")
+        _ax.plot(_xs, _xs + 1, color="gray", linestyle=":", label="±1 unit")
+        _ax.plot(_xs, _xs - 1, color="gray", linestyle=":")
+        _ax.plot(_xs, _stats["slope"] * _xs + _stats["intercept"], "r-", label="Correlation line")
+
+        _ax.set_xlim(_lims)
+        _ax.set_ylim(_lims)
+        _ax.set_xlabel("Actual")
+        _ax.set_ylabel("Predicted")
+        _ax.set_title(f"{_split.capitalize()} (R² = {_stats['r_squared']:.2f})")
+        _ax.legend()
+
+    _fig.suptitle(f"Model {_model_number}: {_model_label}")
+    _fig
     return
 
 
