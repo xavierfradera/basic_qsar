@@ -18,7 +18,7 @@ def _():
     import matplotlib.pyplot as plt
     from scipy import stats
     from sklearn.model_selection import train_test_split
-    from yellowbrick.regressor import prediction_error, residuals_plot
+    from sklearn.metrics import mean_absolute_error, r2_score, root_mean_squared_error
 
     import wget
 
@@ -26,8 +26,11 @@ def _():
         FPCalculator,
         MoleculeTransformer,
         dm,
+        mean_absolute_error,
         np,
         pd,
+        r2_score,
+        root_mean_squared_error,
         stats,
         train_test_split,
     )
@@ -153,7 +156,22 @@ def _(
 
 @app.cell
 def _(summary):
-    summary
+    # display summary
+    import marimo as _mo
+
+    _numeric_cols = ["r_squared", "pearson_r", "mae", "rmse", "slope", "intercept"]
+
+    _pivoted = summary.pivot(index="model_number", columns="split", values=_numeric_cols)
+    _pivoted.columns = [f"{_metric}_{_split}" for _metric, _split in _pivoted.columns]
+    _pivoted = _pivoted.reset_index()
+
+    _value_cols = [_c for _c in _pivoted.columns if _c != "model_number"]
+
+    _mo.ui.table(
+        _pivoted,
+        format_mapping={_col: "{:.2f}" for _col in _value_cols},
+        selection=None,
+    )
     return
 
 
